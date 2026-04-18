@@ -1,49 +1,6 @@
 // this is the tokenizer that takes the markdown and turns it into a list of tokens
 
-#[allow(unused)]
-#[derive(Debug, Clone, PartialEq)]
-pub enum Tok {
-    // ===== Block-level =====
-    Heading {
-        level: u8,
-        content: Vec<Tok>,
-    },
-    Paragraph(Vec<Tok>),
-    BlockQuote(Vec<Tok>),
-    UnorderedList(Vec<Vec<Tok>>), // list of items
-    OrderedList(Vec<Vec<Tok>>),
-    ListItem(Vec<Tok>),
-    CodeBlock {
-        language: Option<String>,
-        content: String,
-    },
-    HorizontalRule,
-    Table {
-        headers: Vec<Vec<Tok>>,
-        rows: Vec<Vec<Vec<Tok>>>,
-    },
-    // ===== Inline-level =====
-    Text(String),
-    Emphasis(Vec<Tok>),      // *italic*
-    Strong(Vec<Tok>),        // **bold**
-    Strikethrough(Vec<Tok>), // ~~text~~
-    InlineCode(String),
-    Link {
-        text: Vec<Tok>,
-        url: String,
-        title: Option<String>,
-    },
-    Image {
-        alt: String,
-        url: String,
-        title: Option<String>,
-    },
-    // ===== Special / misc =====
-    LineBreak,
-    SoftBreak,
-    Html(String),
-    EscapedChar(char),
-}
+
 
 #[allow(unused)]
 #[derive(Debug, Clone, PartialEq)]
