@@ -1,15 +1,53 @@
-use crate::{
-    ast::{Node, Parser},
-    codegen::generate,
-    token::{LexTok, Tokenizer},
-};
+use crate::{ast::parse_tokens, codegen::generate_html, token::lex_text};
 
 pub mod ast;
 pub mod codegen;
 pub mod token;
 
+use clap::Parser;
+use std::fs;
+use std::path::PathBuf;
+
+/// Read a file and either print or write output
+#[derive(Parser, Debug)]
+#[command(name = "file-cli")]
+#[command(about = "Process a file and output result")]
+struct Args {
+    /// Input file path
+    #[arg(short, long)]
+    input: PathBuf,
+
+    /// Optional output file path
+    #[arg(short, long)]
+    output: Option<PathBuf>,
+}
+
 fn main() {
-    println!("Hello, world!");
+    let args = Args::parse();
+
+    // Read input
+    let content = match fs::read_to_string(&args.input) {
+        Ok(data) => data,
+        Err(err) => {
+            eprintln!("Error reading input file: {}", err);
+            std::process::exit(1);
+        }
+    };
+
+    let processed = md_to_html(content);
+
+    match args.output {
+        Some(path) => {
+            if let Err(err) = fs::write(&path, processed) {
+                eprintln!("Error writing to file: {}", err);
+                std::process::exit(1);
+            }
+            println!("Output written to {:?}", path);
+        }
+        None => {
+            println!("{}", processed);
+        }
+    }
 }
 
 fn md_to_html(markdown: String) -> String {
@@ -17,18 +55,4 @@ fn md_to_html(markdown: String) -> String {
     let ast = parse_tokens(tokens);
     let html = generate_html(ast);
     html
-}
-
-fn lex_text(text: &String) -> Vec<LexTok> {
-    let mut tokenizer = Tokenizer::new(text);
-    tokenizer.tokenize()
-}
-
-fn parse_tokens(tokens: Vec<LexTok>) -> Vec<Node> {
-    let mut parser = Parser::new(tokens);
-    parser.parse()
-}
-
-fn generate_html(ast: Vec<Node>) -> String {
-    generate(ast.as_slice())
 }
