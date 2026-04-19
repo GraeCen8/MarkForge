@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+/* ===== BASE ===== */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  line-height: 1.6;
+  max-width: 800px;
+  margin: 40px auto;
+  padding: 0 16px;
+  color: #24292f;
+  background: #ffffff;
+}
+
+/* Headings */
+h1, h2, h3, h4, h5, h6 {
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+}
+
+/* Paragraphs */
+p {
+  margin: 1em 0;
+}
+
+/* Links */
+a {
+  color: #0969da;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Lists */
+ul, ol {
+  padding-left: 1.5em;
+  margin: 1em 0;
+}
+
+li {
+  margin: 0.4em 0;
+}
+
+/* Blockquotes */
+blockquote {
+  border-left: 4px solid #d0d7de;
+  padding-left: 1em;
+  color: #57606a;
+  margin: 1.5em 0;
+  background: #f6f8fa;
+}
+
+/* Inline code */
+code {
+  font-family: "Fira Code", monospace;
+  background: #f6f8fa;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 0.9em;
+}
+
+/* Code blocks */
+pre {
+  background: #0d1117;
+  color: #c9d1d9;
+  padding: 16px;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+}
+
+/* Tables */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1.5em 0;
+}
+
+th, td {
+  border: 1px solid #d0d7de;
+  padding: 8px;
+}
+
+th {
+  background: #f6f8fa;
+  text-align: left;
+}
+
+/* Images */
+img {
+  max-width: 100%;
+  border-radius: 6px;
+}
+
+/* Horizontal rule */
+hr {
+  border: none;
+  border-top: 1px solid #d0d7de;
+  margin: 2em 0;
+}
+
+/* ===== DARK MODE ===== */
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #0d1117;
+    color: #c9d1d9;
+  }
+
+  blockquote {
+    background: #161b22;
+    border-left: 4px solid #30363d;
+  }
+
+  code {
+    background: #161b22;
+  }
+
+  th {
+    background: #161b22;
+  }
+}
+
+</style>
+</head>
+<body>
+<h1> Building a Programming Language with Rust  Cranelift</h1><p></p><h2> What is Cranelift?</h2><p></p><p>Cranelift is a fast, Rust-native code generator used by Wasmtime and rustc as a backend. Unlike LLVM, it's:</p><p></p><ul><li> <strong>Written in Rust</strong> — no C FFI headaches</li><li> <strong>Fast to compile</strong> — great for JIT use cases</li><li> <strong>Simpler API</strong> — less powerful optimizer, but far easier to get started with</li><li> <strong>No external install</strong> — just a cargo dependency</li></ul><p></p><ul><li></li></ul><p></p><h2> Project Setup</h2><p></p><pre><code>
+ Cargo.toml
+dependencies
+cranelift = "0.115"
+cranelift-module = "0.115"
+cranelift-object = "0.115"    for AOT: emit .o files
+cranelift-native = "0.115"    detects your CPU's ISA
+target-lexicon = "0.12"
+</code></pre><p></p><p></p><ul><li></li></ul><p></p><h2> The Pipeline</h2><p></p><pre><code>
+Source code  →  Lexer  →  Parser  →  AST  →  Codegen  →  Cranelift IR  →  Native binary
+</code></pre><p></p><p></p><p>You write everything up to and including codegen. Cranelift handles the rest.</p><p></p><ul><li></li></ul><p></p><h2> Phase 1: Lexer</h2><p></p><p>The lexer converts raw text into a flat list of tokens.</p><p></p><pre><code>
+deriveDebug, Clone, PartialEq
+pub enum Token {
+    Numberi64,
+    IdentString,
+    // Keywords
+    Fn, Let, Return, If, Else,
+    // Operators
+    Plus, Minus, Star, Slash,
+    Equals, DoubleEq, Lt, Gt,
+    // Delimiters
+    LParen, RParen, LBrace, RBrace, Comma, Semicolon,
+    EOF,
+}
+</code></pre><p></p><p></p><p>Walk character by character, match patterns, emit tokens. Keywords are just identifiers you check after the fact:</p><p></p><pre><code>
+fn identorkeywords: String - Token {
+    match s.asstr {
+        "fn"     = Token::Fn,
+        "let"    = Token::Let,
+        "return" = Token::Return,
+        "if"     = Token::If,
+        "else"   = Token::Else,
+                = Token::Idents,
+    }
+}
+</code></pre><p></p><p></p><ul><li></li></ul><p></p><h2> Phase 2: AST</h2><p></p><p>Define a tree of nodes that represent your language's structure.</p><p></p><pre><code>
+pub enum Expr {
+    Numberi64,
+    IdentString,
+    BinOp { op: Op, left: Box&lt;Expr, right: Box&lt;Expr },
+    Call { name: String, args: Vec&lt;Expr },
+    If { cond: Box&lt;Expr, then: Vec&lt;Stmt, else: Option&lt;Vec&lt;Stmt },
+}
+
+pub enum Stmt {
+    Let { name: String, value: Expr },
+    ReturnExpr,
+    ExprExpr,
+}
+
+pub struct Function {
+    pub name: String,
+    pub params: Vec&lt;String,
+    pub body: Vec&lt;Stmt,
+}
+</code></pre><p></p><p></p><ul><li></li></ul><p></p><h2> Phase 3: Parser</h2><p></p><p>A <strong>recursive descent parser</strong> — one function per grammar rule. It consumes tokens and builds the AST.</p><p></p><pre><code>
+// Parses: let x = &lt;expr;
+fn parselet&amp;mut self - Stmt {
+    self.expectToken::Let;
+    let name = self.expectident;
+    self.expectToken::Equals;
+    let value = self.parseexpr;
+    self.expectToken::Semicolon;
+    Stmt::Let { name, value }
+}
+
+// Parses binary expressions with precedence climbing
+fn parseexpr&amp;mut self - Expr {
+    let mut left = self.parseprimary;
+    while let Someop = self.peekbinop {
+        self.advance;
+        let right = self.parseprimary;
+        left = Expr::BinOp { op, left: Box::newleft, right: Box::newright };
+    }
+    left
+}
+</code></pre><p></p><p></p><ul><li></li></ul><p></p><h2> Phase 4: Cranelift Codegen</h2><p></p><p>This is where Cranelift enters. You build functions using a <code>FunctionBuilder</code>, emitting instructions block by block.</p><p></p><h3> Setup</h3><p></p><pre><code>
+use cranelift::prelude::;
+use craneliftmodule::{Module, Linkage};
+use craneliftobject::{ObjectModule, ObjectBuilder};
+
+// Detect native ISA your CPU
+let isa = craneliftnative::builder
+    .unwrap
+    .finishsettings::Flags::newsettings::builder
+    .unwrap;
+
+let objbuilder = ObjectBuilder::new
+    isa,
+    "mymodule",
+    craneliftmodule::defaultlibcallnames,
+.unwrap;
+
+let mut module = ObjectModule::newobjbuilder;
+</code></pre><p></p><p></p><h3> Declaring a Function</h3><p></p><pre><code>
+let mut sig = module.makesignature;
+sig.params.pushAbiParam::newtypes::I64;  // one i64 argument
+sig.returns.pushAbiParam::newtypes::I64; // returns i64
+
+let funcid = module
+    .declarefunction"addone", Linkage::Export, &amp;sig
+    .unwrap;
+</code></pre><p></p><p></p><h3> Building the Function Body</h3><p></p><pre><code>
+let mut ctx = module.makecontext;
+ctx.func.signature = sig;
+
+let mut funcctx = FunctionBuilderContext::new;
+let mut builder = FunctionBuilder::new&amp;mut ctx.func, &amp;mut funcctx;
+
+// Every function needs at least one basic block
+let entryblock = builder.createblock;
+builder.appendblockparamsforfunctionparamsentryblock;
+builder.switchtoblockentryblock;
+builder.sealblockentryblock;
+
+// Get the function parameter
+let arg = builder.blockparamsentryblock;
+
+// Emit: arg  1
+let one = builder.ins.iconsttypes::I64, 1;
+let result = builder.ins.iaddarg, one;
+builder.ins.return&amp;result;
+
+builder.finalize;
+module.definefunctionfuncid, &amp;mut ctx.unwrap;
+</code></pre><p></p><p></p><h3> Emit the Object File</h3><p></p><pre><code>
+let product = module.finish;
+let bytes = product.emit.unwrap;
+std::fs::write"output.o", bytes.unwrap;
+</code></pre><p></p><p></p><p>Then link with: <code>cc output.o -o myprogram</code></p><p></p><ul><li></li></ul><p></p><h2> Key Cranelift Concepts</h2><p></p><h3> Basic Blocks</h3><p></p><p>All code lives in <strong>basic blocks</strong> — straight-line sequences of instructions with no internal branching. Branches only happen at the end of a block.</p><p></p><pre><code>
+let thenblock = builder.createblock;
+let elseblock = builder.createblock;
+let mergeblock = builder.createblock;
+
+// Branch at end of current block
+builder.ins.brifcond, thenblock, &amp;, elseblock, &amp;;
+</code></pre><p></p><p></p><h3> SSA Values</h3><p></p><p>Every instruction returns a <code>Value</code>. Values are immutable — you never overwrite them. For mutable variables, use <strong>stack slots</strong>:</p><p></p><pre><code>
+// Mutable variable pattern
+let slot = builder.createsizedstackslotStackSlotData::new
+    StackSlotKind::ExplicitSlot, 8, 0  // 8 bytes for i64
+;
+
+// Store
+builder.ins.stackstorevalue, slot, 0;
+
+// Load
+let loaded = builder.ins.stackloadtypes::I64, slot, 0;
+</code></pre><p></p>
+</body>
+</html>
