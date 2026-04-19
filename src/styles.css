@@ -71,6 +71,40 @@ pre {
 pre code {
   background: none;
   padding: 0;
+  white-space: pre;
+  font-family: "Fira Code", monospace;
+}
+
+pre code .token.keyword {
+  color: #ff7b72;
+}
+
+pre code .token.string {
+  color: #a5d6ff;
+}
+
+pre code .token.comment {
+  color: #8b949e;
+}
+
+pre code .token.number {
+  color: #ffa657;
+}
+
+pre code .token.function {
+  color: #d2a8ff;
+}
+
+pre code .token.type {
+  color: #7ee787;
+}
+
+pre code .token.operator {
+  color: #79c0ff;
+}
+
+pre code .token.punctuation {
+  color: #8b949e;
 }
 
 /* Tables */

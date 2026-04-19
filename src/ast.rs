@@ -58,6 +58,10 @@ impl Parser {
         let mut nodes = Vec::new();
 
         while !self.is_eof() {
+            if matches!(self.peek(), LexTok::Newline) {
+                self.advance();
+                continue;
+            }
             nodes.push(self.parse_block());
         }
 
@@ -68,13 +72,12 @@ impl Parser {
 //these are the main parsing funcs that parses a given thing
 impl Parser {
     fn parse_block(&mut self) -> Node {
-        let next_tok = self.peek();
-        match next_tok {
+        match self.peek() {
             LexTok::Hash => self.parse_heading(),
             LexTok::Dash | LexTok::Number(_) => self.parse_list(),
             LexTok::GreaterThan => self.parse_blockquote(),
             LexTok::Backtick => {
-                if *self.peek() == LexTok::Backtick {
+                if self.is_code_block_start() {
                     self.parse_code_block()
                 } else {
                     self.parse_code_inline()
@@ -117,10 +120,7 @@ impl Parser {
                 Node::SoftBreak
             }
 
-            _ => {
-                self.advance();
-                Node::Text("".into())
-            }
+            _ => self.parse_text_token(),
         }
     }
 }
@@ -141,6 +141,17 @@ impl Parser {
         tok
     }
 
+    fn is_code_block_start(&self) -> bool {
+        matches!(
+            (
+                self.peek(),
+                self.tokens.get(self.pos + 1),
+                self.tokens.get(self.pos + 2)
+            ),
+            (LexTok::Backtick, Some(LexTok::Backtick), Some(LexTok::Backtick))
+        )
+    }
+
     fn is_eof(&self) -> bool {
         matches!(self.peek(), LexTok::EOF)
     }
@@ -149,6 +160,43 @@ impl Parser {
         if matches!(self.peek(), LexTok::Newline) {
             self.advance();
         }
+    }
+
+    fn parse_text_token(&mut self) -> Node {
+        if let Some(tok) = self.advance() {
+            Node::Text(self.token_to_text(&tok))
+        } else {
+            Node::Text(String::new())
+        }
+    }
+
+    fn token_to_text(&self, tok: &LexTok) -> String {
+        match tok {
+            LexTok::Text(t) => t.clone(),
+            LexTok::Hash => "#".into(),
+            LexTok::Star => "*".into(),
+            LexTok::Underscore => "_".into(),
+            LexTok::Tilde => "~".into(),
+            LexTok::Backtick => "`".into(),
+            LexTok::Dash => "-".into(),
+            LexTok::Plus => "+".into(),
+            LexTok::Number(n) => n.clone(),
+            LexTok::LBracket => "[".into(),
+            LexTok::RBracket => "]".into(),
+            LexTok::LParen => "(".into(),
+            LexTok::RParen => ")".into(),
+            LexTok::GreaterThan => ">".into(),
+            LexTok::Pipe => "|".into(),
+            LexTok::Newline => "\n".into(),
+            LexTok::EOF => String::new(),
+        }
+    }
+
+    fn tokens_to_text(&self, start: usize, end: usize) -> String {
+        self.tokens[start..end]
+            .iter()
+            .map(|tok| self.token_to_text(tok))
+            .collect()
     }
 }
 
@@ -213,40 +261,9 @@ impl Parser {
         Node::BlockQuote(content)
     }
 
-    fn parse_code_block(&mut self) -> Node {
-        self.advance();
-        self.advance();
-        self.advance();
-
-        //an optional language
-        let language = match self.peek() {
-            LexTok::Text(t) => {
-                let lang = t.clone();
-                self.advance();
-                Some(lang)
-            }
-            _ => None,
-        };
-
-        let mut content = String::new();
-
-        while !self.is_code_block_end() && !self.is_eof() {
-            match self.advance() {
-                Some(LexTok::Text(t)) => content.push_str(&t),
-                Some(LexTok::Newline) => content.push('\n'),
-                _ => {}
-            }
-        }
-
-        self.advance();
-        self.advance();
-        self.advance();
-
-        Node::CodeBlock { language, content }
-    }
-
     fn parse_link(&mut self) -> Node {
         // example link [link text](http://www.example.com)
+        let start_pos = self.pos;
         self.advance();
 
         let mut text = Vec::new();
@@ -255,21 +272,30 @@ impl Parser {
             text.push(self.parse_inline());
         }
 
-        let mut url = String::new();
-
-        while !matches!(self.peek(), LexTok::RParen | LexTok::EOF) {
-            if let Some(LexTok::Text(t)) = self.advance() {
-                url.push_str(&t);
+        if matches!(self.peek(), LexTok::RBracket) {
+            self.advance();
+            if matches!(self.peek(), LexTok::LParen) {
+                self.advance();
+                let mut url = String::new();
+                while !matches!(self.peek(), LexTok::RParen | LexTok::EOF) {
+                    if let Some(LexTok::Text(t)) = self.advance() {
+                        url.push_str(&t);
+                    } else if let Some(tok) = self.advance() {
+                        url.push_str(&self.token_to_text(&tok));
+                    }
+                }
+                self.advance();
+                return Node::Link {
+                    text,
+                    url,
+                    title: None,
+                };
             }
         }
 
-        self.advance();
-
-        Node::Link {
-            text,
-            url,
-            title: None,
-        }
+        // Not an actual link, treat as literal text
+        let literal = self.tokens_to_text(start_pos, self.pos);
+        Node::Text(literal)
     }
 }
 
@@ -341,8 +367,8 @@ impl Parser {
         let mut content = String::new();
 
         while !matches!(self.peek(), LexTok::Backtick | LexTok::EOF) {
-            if let Some(LexTok::Text(t)) = self.advance() {
-                content.push_str(&t);
+            if let Some(tok) = self.advance() {
+                content.push_str(&self.token_to_text(&tok));
             }
         }
 
@@ -351,10 +377,44 @@ impl Parser {
         Node::InlineCode(content)
     }
 
-    fn is_code_block_end(&mut self) -> bool {
+    fn parse_code_block(&mut self) -> Node {
+        self.advance();
+        self.advance();
+        self.advance();
+
+        //an optional language
+        let language = match self.peek() {
+            LexTok::Text(t) => {
+                let lang = t.clone();
+                self.advance();
+                Some(lang)
+            }
+            _ => None,
+        };
+
+        let mut content = String::new();
+
+        while !self.is_code_block_end() && !self.is_eof() {
+            if let Some(tok) = self.advance() {
+                content.push_str(&self.token_to_text(&tok));
+            }
+        }
+
+        self.advance();
+        self.advance();
+        self.advance();
+
+        Node::CodeBlock { language, content }
+    }
+
+    fn is_code_block_end(&self) -> bool {
         matches!(
-            (self.peek(), self.peek_next()),
-            (LexTok::Backtick, LexTok::Backtick)
+            (
+                self.peek(),
+                self.tokens.get(self.pos + 1),
+                self.tokens.get(self.pos + 2)
+            ),
+            (LexTok::Backtick, Some(LexTok::Backtick), Some(LexTok::Backtick))
         )
     }
 }
@@ -362,4 +422,65 @@ impl Parser {
 pub fn parse_tokens(tokens: Vec<LexTok>) -> Vec<Node> {
     let mut parser = Parser::new(tokens);
     parser.parse()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::token::lex_text;
+
+    #[test]
+    fn code_block_preserves_special_characters() {
+        let markdown = "```rust\nlet x = [1, 2];\nprintln!(\"{}\\n\", x[0]);\n```\n";
+        let ast = parse_tokens(lex_text(&markdown.to_string()));
+
+        assert_eq!(ast.len(), 1);
+        if let Node::CodeBlock { language, content } = &ast[0] {
+            assert_eq!(language.as_deref(), Some("rust"));
+            assert!(content.contains("[1, 2]"));
+            assert!(content.contains("println!(\"{}\\n\", x[0]);"));
+        } else {
+            panic!("Expected CodeBlock");
+        }
+    }
+
+    #[test]
+    fn inline_code_preserves_brackets_and_parens() {
+        let markdown = "Use `foo(bar)` and `[baz]` in code.";
+        let ast = parse_tokens(lex_text(&markdown.to_string()));
+
+        assert_eq!(ast.len(), 1);
+        if let Node::Paragraph(children) = &ast[0] {
+            let code_node = children.iter().find_map(|node| {
+                if let Node::InlineCode(code) = node {
+                    Some(code)
+                } else {
+                    None
+                }
+            });
+            assert_eq!(code_node.map(|c| c.as_str()), Some("foo(bar)"));
+        } else {
+            panic!("Expected Paragraph");
+        }
+    }
+
+    #[test]
+    fn raw_text_preserves_unhandled_punctuation() {
+        let markdown = "This is > a line with [brackets] and (parentheses).";
+        let ast = parse_tokens(lex_text(&markdown.to_string()));
+
+        assert_eq!(ast.len(), 1);
+        if let Node::Paragraph(children) = &ast[0] {
+            let rendered: String = children
+                .iter()
+                .map(|node| match node {
+                    Node::Text(t) => t.clone(),
+                    _ => String::new(),
+                })
+                .collect();
+            assert_eq!(rendered, "This is > a line with [brackets] and (parentheses).",);
+        } else {
+            panic!("Expected Paragraph");
+        }
+    }
 }
