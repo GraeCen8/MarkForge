@@ -108,6 +108,7 @@ fn gen_node(node: &Node) -> String {
 }
 
 fn escape_html(text: &str) -> String {
+    text.replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
 }
