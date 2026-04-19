@@ -39,11 +39,18 @@ fn gen_node(node: &Node) -> String {
             format!("<code>{}</code>", escape_html(code))
         }
 
-        Node::CodeBlock {
-            language: _,
-            content,
-        } => {
-            format!("<pre><code>{}</code></pre>", escape_html(content))
+        Node::CodeBlock { language, content } => {
+            match language {
+                Some(lang) => format!(
+                    "<pre><code class=\"language-{}\">{}</code></pre>",
+                    lang,
+                    escape_html(content)
+                ),
+                None => format!(
+                    "<pre><code>{}</code></pre>",
+                    escape_html(content)
+                ),
+            }
         }
 
         Node::BlockQuote(children) => {
@@ -101,7 +108,6 @@ fn gen_node(node: &Node) -> String {
 }
 
 fn escape_html(text: &str) -> String {
-    text.replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
 }
