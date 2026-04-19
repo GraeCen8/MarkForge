@@ -1,7 +1,8 @@
-use crate::{ast::parse_tokens, codegen::generate_html, token::lex_text};
+use crate::{ast::parse_tokens, codegen::generate_html, styler::wrap_html, token::lex_text};
 
 pub mod ast;
 pub mod codegen;
+pub mod styler;
 pub mod token;
 
 use clap::Parser;
@@ -54,5 +55,5 @@ fn md_to_html(markdown: String) -> String {
     let tokens = lex_text(&markdown);
     let ast = parse_tokens(tokens);
     let html = generate_html(ast);
-    html
+    wrap_html(&html)
 }
