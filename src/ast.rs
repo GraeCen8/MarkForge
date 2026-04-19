@@ -1,4 +1,4 @@
-use crate::token::{LexTok, Tokenizer};
+use crate::token::LexTok;
 
 #[allow(unused)]
 #[derive(Debug, Clone, PartialEq)]
@@ -74,7 +74,7 @@ impl Parser {
             LexTok::Dash | LexTok::Number(_) => self.parse_list(),
             LexTok::GreaterThan => self.parse_blockquote(),
             LexTok::Backtick => {
-                if self.peek() == LexTok::Backtick {
+                if *self.peek() == LexTok::Backtick {
                     self.parse_code_block()
                 } else {
                     self.parse_code_inline()
@@ -93,7 +93,7 @@ impl Parser {
             }
 
             LexTok::Star => {
-                if self.peek_next() == LexTok::Star {
+                if *self.peek_next() == LexTok::Star {
                     self.parse_strong()
                 } else {
                     self.parse_emphasis()
@@ -104,7 +104,7 @@ impl Parser {
             LexTok::LBracket => self.parse_link(),
 
             LexTok::Tilde => {
-                if self.peek_next() == LexTok::Tilde {
+                if *self.peek_next() == LexTok::Tilde {
                     self.parse_strikethrough()
                 } else {
                     self.advance();
@@ -142,7 +142,7 @@ impl Parser {
     }
 
     fn is_eof(&self) -> bool {
-        matches!(self.peek(), Some(LexTok::EOF))
+        matches!(self.peek(), LexTok::EOF)
     }
 
     fn consume_newlines(&mut self) {
@@ -204,7 +204,7 @@ impl Parser {
 
         let mut content = Vec::new();
 
-        while !matches!(self.peek(), Some(LexTok::Newline) | Some(LexTok::EOF)) {
+        while !matches!(self.peek(), LexTok::Newline | LexTok::EOF) {
             content.push(self.parse_inline());
         }
 
@@ -264,6 +264,12 @@ impl Parser {
         }
 
         self.advance();
+
+        Node::Link {
+            text,
+            url,
+            title: None,
+        }
     }
 }
 
@@ -351,4 +357,9 @@ impl Parser {
             (LexTok::Backtick, LexTok::Backtick)
         )
     }
+}
+
+pub fn parse_tokens(tokens: Vec<LexTok>) -> Vec<Node> {
+    let mut parser = Parser::new(tokens);
+    parser.parse()
 }

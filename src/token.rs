@@ -1,18 +1,16 @@
 // this is the tokenizer that takes the markdown and turns it into a list of tokens
 
-
-
 #[allow(unused)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum LexTok {
     // structural markers
-    Hash,        // #
-    Star,        // *
-    Underscore,  // _
-    Tilde,       // ~
-    Backtick,    // `
-    Dash,        // -
-    Plus,        // +
+    Hash,           // #
+    Star,           // *
+    Underscore,     // _
+    Tilde,          // ~
+    Backtick,       // `
+    Dash,           // -
+    Plus,           // +
     Number(String), // 1. 2. etc
 
     LBracket, // [
@@ -54,30 +52,67 @@ impl Tokenizer {
     }
 
     fn match_tok(&mut self, c: char) -> LexTok {
-        #[rustfmt::skip]
         match c {
-            '#' => { self.advance(); LexTok::Hash }
-            '*' => { self.advance(); LexTok::Star }
-            '_' => { self.advance(); LexTok::Underscore }
-            '~' => { self.advance(); LexTok::Tilde }
-            '`' => { self.advance(); LexTok::Backtick }
-            '-' => { self.advance(); LexTok::Dash }
-            '+' => { self.advance(); LexTok::Plus }
-            '[' => { self.advance(); LexTok::LBracket }
-            ']' => { self.advance(); LexTok::RBracket }
-            '(' => { self.advance(); LexTok::LParen}
-            ')' => { self.advance(); LexTok::RParen }
-            '>' => { self.advance(); LexTok::GreaterThan }
-            '|' => { self.advance(); LexTok::Pipe }
-            '\n' => { self.advance(); LexTok::Newline }
-            
-            c if c.is_numeric() => {
-                self.read_number()
+            '#' => {
+                self.advance();
+                LexTok::Hash
+            }
+            '*' => {
+                self.advance();
+                LexTok::Star
+            }
+            '_' => {
+                self.advance();
+                LexTok::Underscore
+            }
+            '~' => {
+                self.advance();
+                LexTok::Tilde
+            }
+            '`' => {
+                self.advance();
+                LexTok::Backtick
+            }
+            '-' => {
+                self.advance();
+                LexTok::Dash
+            }
+            '+' => {
+                self.advance();
+                LexTok::Plus
+            }
+            '[' => {
+                self.advance();
+                LexTok::LBracket
+            }
+            ']' => {
+                self.advance();
+                LexTok::RBracket
+            }
+            '(' => {
+                self.advance();
+                LexTok::LParen
+            }
+            ')' => {
+                self.advance();
+                LexTok::RParen
+            }
+            '>' => {
+                self.advance();
+                LexTok::GreaterThan
+            }
+            '|' => {
+                self.advance();
+                LexTok::Pipe
+            }
+            '\n' => {
+                self.advance();
+                LexTok::Newline
             }
 
-            _ => {
-                self.read_text()
-            }
+            c if c.is_numeric() => self.read_number(),
+
+            _ => self.read_text(),
         }
     }
 
@@ -94,7 +129,7 @@ impl Tokenizer {
 
         while let Some(c) = self.peek() {
             if "#*_~`_+[]()>\n|".contains(c) {
-                break; 
+                break;
             }
             self.advance();
         }
@@ -104,7 +139,7 @@ impl Tokenizer {
     }
 
     fn read_number(&mut self) -> LexTok {
-        let start = self.pos; 
+        let start = self.pos;
 
         while let Some(c) = self.peek() {
             if c.is_numeric() {
@@ -116,6 +151,10 @@ impl Tokenizer {
 
         let num: String = self.input[start..self.pos].iter().collect();
         LexTok::Number(num)
-
     }
+}
+
+pub fn lex_text(text: &String) -> Vec<LexTok> {
+    let mut tokenizer = Tokenizer::new(text);
+    tokenizer.tokenize()
 }

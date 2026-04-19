@@ -112,3 +112,7 @@ fn escape_attr(text: &str) -> String {
         .replace("<", "&lt;")
         .replace(">", "&gt;")
 }
+
+pub fn generate_html(ast: Vec<Node>) -> String {
+    generate(ast.as_slice())
+}
